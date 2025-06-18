@@ -1,68 +1,81 @@
 // main.js
-
-// 1) Подгружаем переменные из .env (PORT, NODE_ENV и т.п.)
-require('dotenv').config();
-
-const { app, BrowserWindow } = require('electron');
+// ============ IMPORT’Ы ============
 const path = require('path');
-const isDev = process.env.NODE_ENV !== 'production';
+const { app, BrowserWindow } = require('electron');
+const { spawn } = require('child_process'); 
 
+// ============ ПЕРЕМЕННЫЕ ============
+let mainWindow = null;
 let serverProcess = null;
+const SERVER_PORT = 3000; // тот же порт, что у index.js
 
-// 2) В режиме разработки запускаем сервер автоматически
-//if (isDev) {
-  //const { spawn } = require('child_process');
- // const serverPath = path.join(__dirname, 'server', 'index.js');
-//  serverProcess = spawn(
-//    process.execPath, // тот же node.exe
-//    [serverPath],
-//    { stdio: 'inherit' }
-//  );
-//}
+// ============ ФУНКЦИЯ ЗАПУСКА СЕРВЕРА ============
+function startServer() {
+  // Запускаем ваш index.js как дочерний Node-процесс
+  serverProcess = spawn(
+    process.execPath,       // путь к node.exe, т.е. тот же Node, что и для Electron
+    [ path.join(__dirname, 'index.js') ],
+    {
+      cwd: __dirname,
+      env: process.env,
+      stdio: 'inherit'       // чтобы видеть лог сервера прямо в консоли Electron
+    }
+  );
 
-// 3) Функция создания окна
+  serverProcess.on('error', (err) => {
+    console.error('Не удалось запустить сервер:', err);
+  });
+  serverProcess.on('exit', (code, signal) => {
+    console.log(`Сервер завершился с кодом ${code} (${signal})`);
+    serverProcess = null;
+  });
+}
+
+// ============ ФУНКЦИЯ СОЗДАНИЯ ОКНА ELECTRON ============
 function createWindow() {
-  const win = new BrowserWindow({
-    width: 1024,
-    height: 768,
+  mainWindow = new BrowserWindow({
+    width: 900,
+    height: 700,
     webPreferences: {
-      // отключаем nodeIntegration для безопасности,
-      // оставляем контекст изоляции
-      nodeIntegration: false,
-      contextIsolation: true
+      nodeIntegration: false,    // фронтенду не нужен прямой node-доступ
+      contextIsolation: true,    // из соображений безопасности
+      preload: path.join(__dirname, 'preload.js') // опционально, если нужен bridge
     }
   });
 
-  // URL берём из переменной окружения или дефолтно 3001
-  const port = process.env.PORT || 3001;
-  const indexURL = `http://localhost:${port}`;
+  // Открываем наш локальный сервер
+  mainWindow.loadURL(`http://localhost:${SERVER_PORT}`);
+  // mainWindow.webContents.openDevTools(); // → можно раскомментить для отладки
 
-  win.loadURL(indexURL);
-
-  // В dev-режиме открываем инструменты
-  if (isDev) {
-    win.webContents.openDevTools({ mode: 'detach' });
-  }
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
-// 4) Ждём, когда Electron готов, и создаём окно
-app.whenReady().then(createWindow);
+// ============ СЛУШАЕМ СОБЫТИЯ APP ============
+app.on('ready', () => {
+  // Сначала запускаем Node-сервер
+  startServer();
 
-// 5) На macOS принято пересоздавать окно при клике по иконке
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+  // Ждём небольшую паузу, чтобы сервер успел подняться, потом открываем окно
+  // (Можно усложнить: ждать успешного «ping» на http://localhost:3000)
+  setTimeout(createWindow, 800);
 });
 
-// 6) Корректно выходим + убиваем сервер, если он был запущен
 app.on('window-all-closed', () => {
+  // Закрываем сервер, когда окно закрыто
   if (serverProcess) {
     serverProcess.kill();
     serverProcess = null;
   }
-  // На Windows и Linux полностью выходим
-  if (process.platform !== 'darwin') {
-    app.quit();
+  // Для macOS обычно не выходим из процесса,
+  // но пусть для простоты мы завершим всё:
+  app.quit();
+});
+
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
   }
 });
+preload: path.join(__dirname, 'preload.js')

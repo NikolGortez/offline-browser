@@ -1,0 +1,20 @@
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(255) UNIQUE NOT NULL,
+  display_name VARCHAR(255),
+  email VARCHAR(255),
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE notes (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255),
+  content TEXT,
+  is_global BOOLEAN DEFAULT FALSE,
+  user_id INTEGER REFERENCES users(id),
+  origin_id INTEGER REFERENCES notes(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_deleted BOOLEAN DEFAULT FALSE
+);
